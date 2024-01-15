@@ -114,13 +114,13 @@ while True:
 
   # make the ball bounce of the paddles
   paddle_right_x = screen_width // 2 - 50
-  if (ball.xcor() > paddle_right_x - 10 and ball.xcor() < paddle_right_x) and (ball.ycor() < paddle_right.ycor() + 50 and ball.ycor() > paddle_right.ycor() - 50):
+  if (ball.xcor() > paddle_right_x - 10 and ball.xcor() < paddle_right_x) and (ball.ycor() < paddle_right.ycor() + 60 and ball.ycor() > paddle_right.ycor() - 60):
     os.system("aplay bounce.wav&")
     ball.setx(paddle_right_x - 10)
     ball.dx *= -1
 
   paddle_left_x = - (screen_width // 2 - 50)
-  if (ball.xcor() < paddle_left_x + 10 and ball.xcor() > paddle_left_x) and (ball.ycor() < paddle_left.ycor() + 50 and ball.ycor() > paddle_left.ycor() - 50):
+  if (ball.xcor() < paddle_left_x + 10 and ball.xcor() > paddle_left_x) and (ball.ycor() < paddle_left.ycor() + 60 and ball.ycor() > paddle_left.ycor() - 60):
     os.system("aplay bounce.wav&")
     ball.setx(paddle_left_x + 10)
     ball.dx *= -1
