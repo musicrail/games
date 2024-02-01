@@ -1,3 +1,5 @@
+from itertools import chain
+
 import pygame
 
 """
@@ -13,17 +15,25 @@ class Player:
 
 class Coin:
   def __init__(self, width, rows, position, player: Player) -> None:
+    """
+    
+    position: (column, index)  # both are in range(Window.rows)
+    """
     self.columnWidth = width // rows
     self.radius = self.columnWidth // 2
     self.x = self.columnWidth * position[0] + self.radius
     self.y = self.columnWidth * (rows - 1 - position[1]) + self.radius
     self.coords = (self.x, self.y)
     self.player = player
+    self.position = position
 
-  def draw(self, surface):
-    pygame.draw.circle(surface, self.player.color, self.coords, self.radius-4)
+  def draw(self, surface, color=None, shade=1):
+    if color is None:
+      color = self.player.color
+    pygame.draw.circle(surface, tuple(map(lambda x: int(x*shade), color)), self.coords, self.radius-4)
 
 class Window:
+  """"""
   def __init__(self, players: list[Player]) -> None:
     self.rows = 5
     self.coin_matrix: list[list[Coin]] = [[None for _ in range(self.rows)] for _ in range(self.rows)]  # coin-matrix represents the window
@@ -32,6 +42,8 @@ class Window:
     self.surface = pygame.display.set_mode((self.width, self.height))
     self.players = players
     self.active_player, self.inactive_player = self.players
+    self.winner = None
+    self.winning_positions = None
 
   def draw_grid(self):
     rectSize = self.width // self.rows
@@ -48,10 +60,13 @@ class Window:
         if coin is not None:
           coin.draw(self.surface)
 
-  def draw(self):
+  def update(self):
     self.surface.fill((255,255,255))
     self.draw_grid()
     self.draw_matrix()
+    if self.winning_positions is not None:
+      for coin in self.winning_positions:
+        coin.draw(self.surface, shade=0.5)
     pygame.display.update()
 
   def listen_for_input(self):
@@ -71,58 +86,60 @@ class Window:
           self.coin_matrix[column][index] = Coin(self.width, self.rows, (column, index), self.active_player)
           self.active_player, self.inactive_player = self.inactive_player, self.active_player
           break
-
-  def check_for_win(self):
-    coin_matrix = [map(lambda z: True if z.player == self.active_player else None, column) for column in self.coin_matrix]
-    transposed_matrix = 0
-
-    # quick reminder: the inner lists are the columns, i.e. coin_matrix[0][3] gets the 4th entry in the 1th column
-    for column in self.coin_matrix:  # checks the columns for a winner
-      last_coin_owner = None
-      num = 0
-      for index, coin_field in enumerate(column):
-        if index > self.rows - 4 and not last_coin_owner:
-          continue
-        elif coin_field is None:
-          last_coin_owner = None
-          num = 0
-        elif coin_field and last_coin_owner is None:
-          last_coin_owner = coin_field.player
-          num = 1
-        elif coin_field and last_coin_owner == coin_field.player:
-          num += 1
-        elif coin_field and last_coin_owner != coin_field.player:
-          last_coin_owner = None
-          num = 0
-        if num == 4:
-          return last_coin_owner.name
-    for r in range(self.rows):  # checks the rows for a winner
-      last_coin_owner = None
-      num = 0
-      for c in range(self.rows):
-        coin_field = self.coin_matrix[c][r]
-        if c > self.rows - 4 and not last_coin_owner:
-          continue
-        elif coin_field is None:
-          last_coin_owner = None
-          num = 0
-        elif coin_field and last_coin_owner is None:
-          last_coin_owner = coin_field.player
-          num = 1
-        elif coin_field and last_coin_owner == coin_field.player:
-          num += 1
-        elif coin_field and last_coin_owner != coin_field.player:
-          last_coin_owner = None
-          num = 0
-        if num == 4:
-          return last_coin_owner.name
-    
-    # check for winner and show winner and return True
+ 
+  def check_for_gameover(self):
+    """Check for a winner or a full coin_matrix."""
+    self._check_for_win()
+    if self.winner is not None:
+      return self.winner.name
     if all([all(column) for column in self.coin_matrix]):
-      print("game over")
-      return True
+      return "game over"
+    return None
+
+  def _check_for_win(self) -> Player:
+    """Calls self._check on every Coin in the coin_matrix."""
+    for field in chain.from_iterable(self.coin_matrix):
+      if field is not None:
+        self._check(field, list(), self.coin_matrix)
+    return None
   
+  def _check(self, coin_field: Coin, store: list[Coin], matrix: list[list[Coin]], direction: tuple[int, int] = (0,0)):
+    """Checks for a winning line and sets self.winner."""
+    store = store.copy()
+    store.append(coin_field)
+    if len(store) >= 4:
+      self.winning_positions = store.copy()
+      self.winner = coin_field.player
+    valid_range = range(len(matrix))
+    x_coin_field = coin_field.position[0]
+    y_coin_field = coin_field.position[1]
+    if direction == (0,0):
+      for x in range(-1,2):
+        for y in range(-1,2):
+          x_neighbor = x_coin_field + x
+          y_neighbor = y_coin_field + y
+          if x == 0 and y == 0:
+            continue
+          if x_neighbor not in valid_range or y_neighbor not in valid_range:
+            continue
+          neighbor = matrix[x_neighbor][y_neighbor]
+          if neighbor is None or neighbor.player != coin_field.player:
+            continue
+          self._check(neighbor, store, matrix, direction=(x,y))
+    else:
+      x_neighbor = x_coin_field + direction[0]
+      y_neighbor = y_coin_field + direction[1]
+      if x_neighbor not in valid_range or y_neighbor not in valid_range:
+        return None
+      neighbor = matrix[x_neighbor][y_neighbor]
+      if neighbor is None or neighbor.player != store[-1].player:
+        return None
+      self._check(neighbor, store, matrix, direction=direction)
+    return None
+
   def reset(self):
+    self.winning_positions = None
+    self.winner = None
     self.coin_matrix: list[list[Coin]] = [[None for _ in range(self.rows)] for _ in range(self.rows)]  # coin-matrix represents the window
 
 
@@ -136,9 +153,9 @@ def main():
     clock.tick(10)
     # TODO: make some kind of pause after a mouseclick. otherwise the game maybe take
     window.listen_for_input()
-    window.draw()
-    gameover = window.check_for_win()
-    if gameover:
+    gameover = window.check_for_gameover()
+    window.update()
+    if gameover is not None:
       print(gameover)
       pygame.time.delay(2000)
       window.reset()
